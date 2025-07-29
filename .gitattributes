@@ -1,0 +1,15 @@
+# Auto detect text files and perform LF normalization
+* text=auto eol=lf
+
+*.lua text
+*.md text
+*.json text
+*.yml text
+*.yaml text
+*.toml text
+*.vim text
+
+# Exclude files from archive
+.gitattributes export-ignore
+.gitignore export-ignore
+.github export-ignore
