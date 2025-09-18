@@ -105,7 +105,9 @@ function M.process_data(client, data, on_message, on_close, on_error, auth_token
           client.state = "closing"
           logger.debug("client", "Closing connection for client due to failed handshake:", client.id)
           vim.schedule(function()
-            client.tcp_handle:close()
+            if not client.tcp_handle:is_closing() then
+              client.tcp_handle:close()
+            end
           end)
         end
       end)
@@ -212,18 +214,22 @@ function M.close_client(client, code, reason)
   code = code or 1000
   reason = reason or ""
 
+  client.state = "closing"
+
   if client.handshake_complete then
     local close_frame = frame.create_close_frame(code, reason)
     client.tcp_handle:write(close_frame, function()
       client.state = "closed"
-      client.tcp_handle:close()
+      if not client.tcp_handle:is_closing() then
+        client.tcp_handle:close()
+      end
     end)
   else
     client.state = "closed"
-    client.tcp_handle:close()
+    if not client.tcp_handle:is_closing() then
+      client.tcp_handle:close()
+    end
   end
-
-  client.state = "closing"
 end
 
 ---@brief Check if a client connection is alive
