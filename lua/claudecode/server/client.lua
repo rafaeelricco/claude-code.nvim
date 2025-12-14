@@ -18,7 +18,7 @@ local M = {}
 ---@param tcp_handle table The vim.loop TCP handle
 ---@return WebSocketClient client The client object
 function M.create_client(tcp_handle)
-  local client_id = tostring(tcp_handle):gsub("userdata: ", "client_")
+  local client_id = tostring(tcp_handle):gsub("^[%w_]+:%s*", "client_")
 
   local client = {
     id = client_id,
