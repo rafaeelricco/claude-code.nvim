@@ -21,12 +21,13 @@ local function handler(_params) -- Prefix unused params with underscore
   end
 
   local selection = selection_module.get_latest_selection()
+  local result
 
   if not selection then
     -- Consider if "no selection" is an error or a valid state returning empty/specific data.
     -- For now, returning an empty object or specific structure might be better than an error.
     -- Let's assume it's valid to have no selection and return a structure indicating that.
-    return {
+    result = {
       text = "",
       filePath = vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf()),
       fileUrl = "file://" .. vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf()),
@@ -36,9 +37,21 @@ local function handler(_params) -- Prefix unused params with underscore
         isEmpty = true,
       },
     }
+  else
+    result = selection
   end
 
-  return selection -- Directly return the selection data
+  local payload = vim.deepcopy(result)
+  payload.content = nil
+
+  result.content = {
+    {
+      type = "text",
+      text = vim.json.encode(payload),
+    },
+  }
+
+  return result -- Directly return the selection data
 end
 
 return {

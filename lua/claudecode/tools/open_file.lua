@@ -9,6 +9,10 @@ local schema = {
         type = "string",
         description = "Path to the file to open",
       },
+      path = {
+        type = "string",
+        description = "Alias for filePath",
+      },
       startLine = {
         type = "integer",
         description = "Optional: Line number to start selection",
@@ -16,6 +20,18 @@ local schema = {
       endLine = {
         type = "integer",
         description = "Optional: Line number to end selection",
+      },
+      startColumn = {
+        type = "integer",
+        description = "Optional: Column number to start selection",
+      },
+      line = {
+        type = "integer",
+        description = "Alias for startLine",
+      },
+      column = {
+        type = "integer",
+        description = "Alias for startColumn",
       },
       startText = {
         type = "string",
@@ -93,11 +109,12 @@ local function find_main_editor_window()
 end
 
 local function handler(params)
-  if not params.filePath then
+  local file_param = params.filePath or params.path
+  if not file_param then
     error({ code = -32602, message = "Invalid params", data = "Missing filePath parameter" })
   end
 
-  local file_path = vim.fn.expand(params.filePath)
+  local file_path = vim.fn.expand(file_param)
 
   if vim.fn.filereadable(file_path) == 0 then
     -- Using a generic error code for tool-specific operational errors
@@ -131,10 +148,22 @@ local function handler(params)
     vim.cmd("edit " .. vim.fn.fnameescape(file_path))
   end
 
+  local target_line = params.startLine or params.line
+  if target_line and type(target_line) == "number" and target_line > 0 then
+    local target_col = params.startColumn or params.column or 1
+    vim.api.nvim_win_set_cursor(0, { target_line, math.max(target_col - 1, 0) })
+    vim.cmd("normal! zz")
+  end
+
   -- TODO: Implement selection by line numbers (params.startLine, params.endLine)
   -- TODO: Implement selection by text patterns if params.startText and params.endText are provided.
 
-  return { message = "File opened: " .. file_path }
+  return {
+    message = "File opened: " .. file_path,
+    content = {
+      { type = "text", text = "Opened file: " .. file_path },
+    },
+  }
 end
 
 return {

@@ -6,6 +6,8 @@
 
 local M = {}
 
+local logger = require("claudecode.logger")
+
 --- Path to the lock file directory
 ---@return string lock_dir The path to the lock file directory
 local function get_lock_dir()
@@ -73,23 +75,31 @@ end
 ---@return string result_or_error The lock file path if successful, or error message if failed
 ---@return string? auth_token The authentication token if successful
 function M.create(port, auth_token)
+  logger.debug("lockfile", "Creating lock file for port: " .. tostring(port))
+
   if not port or type(port) ~= "number" then
+    logger.error("lockfile", "Invalid port number: " .. tostring(port))
     return false, "Invalid port number"
   end
 
   if port < 1 or port > 65535 then
+    logger.error("lockfile", "Port out of range: " .. tostring(port))
     return false, "Port number out of valid range (1-65535): " .. tostring(port)
   end
+
+  logger.debug("lockfile", "Lock directory: " .. M.lock_dir)
 
   local ok, err = pcall(function()
     return vim.fn.mkdir(M.lock_dir, "p")
   end)
 
   if not ok then
+    logger.error("lockfile", "Failed to create lock directory: " .. (err or "unknown"))
     return false, "Failed to create lock directory: " .. (err or "unknown error")
   end
 
   local lock_path = M.lock_dir .. "/" .. port .. ".lock"
+  logger.debug("lockfile", "Lock file path: " .. lock_path)
 
   local workspace_folders = M.get_workspace_folders()
   if not auth_token then
@@ -144,7 +154,16 @@ function M.create(port, auth_token)
     pcall(function()
       file:close()
     end)
+    logger.error("lockfile", "Failed to write lock file: " .. (write_err or "unknown"))
     return false, "Failed to write lock file: " .. (write_err or "unknown error")
+  end
+
+  -- Verify the file was actually written
+  local verify_ok = vim.fn.filereadable(lock_path) == 1
+  if verify_ok then
+    logger.info("lockfile", "Lock file created successfully: " .. lock_path)
+  else
+    logger.error("lockfile", "Lock file was not created despite no errors: " .. lock_path)
   end
 
   return true, lock_path, auth_token
@@ -155,13 +174,17 @@ end
 ---@return boolean success Whether the operation was successful
 ---@return string? error Error message if operation failed
 function M.remove(port)
+  logger.debug("lockfile", "Removing lock file for port: " .. tostring(port))
+
   if not port or type(port) ~= "number" then
+    logger.error("lockfile", "Invalid port for removal: " .. tostring(port))
     return false, "Invalid port number"
   end
 
   local lock_path = M.lock_dir .. "/" .. port .. ".lock"
 
   if vim.fn.filereadable(lock_path) == 0 then
+    logger.warn("lockfile", "Lock file does not exist for removal: " .. lock_path)
     return false, "Lock file does not exist: " .. lock_path
   end
 
@@ -170,9 +193,11 @@ function M.remove(port)
   end)
 
   if not ok then
+    logger.error("lockfile", "Failed to remove lock file: " .. (err or "unknown"))
     return false, "Failed to remove lock file: " .. (err or "unknown error")
   end
 
+  logger.info("lockfile", "Lock file removed successfully: " .. lock_path)
   return true
 end
 

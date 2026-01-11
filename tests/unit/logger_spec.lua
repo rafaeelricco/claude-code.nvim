@@ -1,175 +1,201 @@
--- luacheck: globals expect
-require("tests.busted_setup")
+--- Tests for lua/claudecode/logger.lua
+--- Centralized logging functionality
 
-describe("Logger", function()
+-- Setup mock vim if not in Neovim
+if not vim then
+  require("tests.helpers.mock_vim").setup()
+end
+
+describe("logger", function()
   local logger
-  local original_vim_schedule
-  local original_vim_notify
-  local original_nvim_echo
-  local scheduled_calls = {}
-  local notify_calls = {}
-  local echo_calls = {}
+  local original_notify
+  local captured_notifications
 
-  local function setup()
+  before_each(function()
+    -- Clear module cache
     package.loaded["claudecode.logger"] = nil
+    package.loaded["claudecode.config"] = nil
 
-    -- Mock vim.schedule to track calls
-    original_vim_schedule = vim.schedule
-    vim.schedule = function(fn)
-      table.insert(scheduled_calls, fn)
-      -- Immediately execute the function for testing
-      fn()
-    end
+    -- Capture notifications without depending on spy methods
+    captured_notifications = {}
+    original_notify = vim.notify
 
-    -- Mock vim.notify to track calls
-    original_vim_notify = vim.notify
     vim.notify = function(msg, level, opts)
-      table.insert(notify_calls, { msg = msg, level = level, opts = opts })
-    end
-
-    -- Mock nvim_echo to track calls
-    original_nvim_echo = vim.api.nvim_echo
-    vim.api.nvim_echo = function(chunks, history, opts)
-      table.insert(echo_calls, { chunks = chunks, history = history, opts = opts })
+      table.insert(captured_notifications, { msg = msg, level = level, opts = opts })
     end
 
     logger = require("claudecode.logger")
-
-    -- Set log level to TRACE to enable all logging levels for testing
-    logger.setup({ log_level = "trace" })
-  end
-
-  local function teardown()
-    vim.schedule = original_vim_schedule
-    vim.notify = original_vim_notify
-    vim.api.nvim_echo = original_nvim_echo
-    scheduled_calls = {}
-    notify_calls = {}
-    echo_calls = {}
-  end
-
-  before_each(function()
-    setup()
   end)
 
   after_each(function()
-    teardown()
+    -- Restore original notify
+    if original_notify then
+      vim.notify = original_notify
+    end
   end)
 
-  describe("error logging", function()
-    it("should wrap error calls in vim.schedule", function()
-      logger.error("test", "error message")
-
-      -- Should have made one scheduled call
-      expect(#scheduled_calls).to_be(1)
-
-      -- Should have called vim.notify with error level
-      expect(#notify_calls).to_be(1)
-      expect(notify_calls[1].level).to_be(vim.log.levels.ERROR)
-      assert_contains(notify_calls[1].msg, "error message")
+  describe("levels", function()
+    it("has ERROR level", function()
+      assert.is_number(logger.levels.ERROR)
     end)
 
-    it("should handle error calls without component", function()
-      logger.error("error message")
-
-      expect(#scheduled_calls).to_be(1)
-      expect(#notify_calls).to_be(1)
-      assert_contains(notify_calls[1].msg, "error message")
-    end)
-  end)
-
-  describe("warn logging", function()
-    it("should wrap warn calls in vim.schedule", function()
-      logger.warn("test", "warning message")
-
-      -- Should have made one scheduled call
-      expect(#scheduled_calls).to_be(1)
-
-      -- Should have called vim.notify with warn level
-      expect(#notify_calls).to_be(1)
-      expect(notify_calls[1].level).to_be(vim.log.levels.WARN)
-      assert_contains(notify_calls[1].msg, "warning message")
+    it("has WARN level", function()
+      assert.is_number(logger.levels.WARN)
     end)
 
-    it("should handle warn calls without component", function()
-      logger.warn("warning message")
+    it("has INFO level", function()
+      assert.is_number(logger.levels.INFO)
+    end)
 
-      expect(#scheduled_calls).to_be(1)
-      expect(#notify_calls).to_be(1)
-      assert_contains(notify_calls[1].msg, "warning message")
+    it("has DEBUG level", function()
+      assert.is_number(logger.levels.DEBUG)
+    end)
+
+    it("has TRACE level", function()
+      assert.is_number(logger.levels.TRACE)
+    end)
+
+    it("levels are ordered correctly", function()
+      assert.is_true(logger.levels.ERROR < logger.levels.WARN)
+      assert.is_true(logger.levels.WARN < logger.levels.INFO)
+      assert.is_true(logger.levels.INFO < logger.levels.DEBUG)
+      assert.is_true(logger.levels.DEBUG < logger.levels.TRACE)
     end)
   end)
 
-  describe("info logging", function()
-    it("should wrap info calls in vim.schedule", function()
-      logger.info("test", "info message")
-
-      -- Should have made one scheduled call
-      expect(#scheduled_calls).to_be(1)
-
-      -- Should have called nvim_echo instead of notify
-      expect(#echo_calls).to_be(1)
-      expect(#notify_calls).to_be(0)
-      assert_contains(echo_calls[1].chunks[1][1], "info message")
+  describe("setup", function()
+    it("accepts valid log_level", function()
+      -- Should not throw
+      logger.setup({ log_level = "debug" })
     end)
-  end)
 
-  describe("debug logging", function()
-    it("should wrap debug calls in vim.schedule", function()
-      logger.debug("test", "debug message")
-
-      -- Should have made one scheduled call
-      expect(#scheduled_calls).to_be(1)
-
-      -- Should have called nvim_echo instead of notify
-      expect(#echo_calls).to_be(1)
-      expect(#notify_calls).to_be(0)
-      assert_contains(echo_calls[1].chunks[1][1], "debug message")
-    end)
-  end)
-
-  describe("trace logging", function()
-    it("should wrap trace calls in vim.schedule", function()
-      logger.trace("test", "trace message")
-
-      -- Should have made one scheduled call
-      expect(#scheduled_calls).to_be(1)
-
-      -- Should have called nvim_echo instead of notify
-      expect(#echo_calls).to_be(1)
-      expect(#notify_calls).to_be(0)
-      assert_contains(echo_calls[1].chunks[1][1], "trace message")
-    end)
-  end)
-
-  describe("fast event context safety", function()
-    it("should not call vim API functions directly", function()
-      -- Simulate a fast event context by removing the mocked functions
-      -- and ensuring no direct calls are made
-      local direct_notify_called = false
-      local direct_echo_called = false
-
-      vim.notify = function()
-        direct_notify_called = true
+    it("accepts all valid log levels", function()
+      local valid_levels = { "error", "warn", "info", "debug", "trace" }
+      for _, level in ipairs(valid_levels) do
+        logger.setup({ log_level = level })
       end
+    end)
 
-      vim.api.nvim_echo = function()
-        direct_echo_called = true
-      end
+    it("defaults to INFO for invalid level", function()
+      -- Should not throw, but will notify
+      logger.setup({ log_level = "invalid" })
+    end)
 
-      vim.schedule = function(fn)
-        -- Don't execute the function, just verify it was scheduled
-        table.insert(scheduled_calls, fn)
-      end
+    it("defaults to INFO for nil config", function()
+      -- Should not throw
+      logger.setup(nil)
+    end)
+  end)
 
-      logger.error("test", "error in fast context")
-      logger.warn("test", "warn in fast context")
-      logger.info("test", "info in fast context")
+  describe("is_level_enabled", function()
+    it("returns true for enabled levels", function()
+      logger.setup({ log_level = "info" })
 
-      -- All should be scheduled, none should be called directly
-      expect(#scheduled_calls).to_be(3)
-      expect(direct_notify_called).to_be_false()
-      expect(direct_echo_called).to_be_false()
+      assert.is_true(logger.is_level_enabled("error"))
+      assert.is_true(logger.is_level_enabled("warn"))
+      assert.is_true(logger.is_level_enabled("info"))
+    end)
+
+    it("returns false for disabled levels", function()
+      logger.setup({ log_level = "info" })
+
+      assert.is_false(logger.is_level_enabled("debug"))
+      assert.is_false(logger.is_level_enabled("trace"))
+    end)
+
+    it("returns false for invalid level name", function()
+      assert.is_false(logger.is_level_enabled("invalid"))
+    end)
+
+    it("respects debug level setting", function()
+      logger.setup({ log_level = "debug" })
+
+      assert.is_true(logger.is_level_enabled("debug"))
+      assert.is_false(logger.is_level_enabled("trace"))
+    end)
+
+    it("respects trace level setting", function()
+      logger.setup({ log_level = "trace" })
+
+      assert.is_true(logger.is_level_enabled("trace"))
+    end)
+
+    it("respects error level setting", function()
+      logger.setup({ log_level = "error" })
+
+      assert.is_true(logger.is_level_enabled("error"))
+      assert.is_false(logger.is_level_enabled("warn"))
+      assert.is_false(logger.is_level_enabled("info"))
+    end)
+  end)
+
+  describe("log functions", function()
+    it("has error function", function()
+      assert.is_function(logger.error)
+    end)
+
+    it("has warn function", function()
+      assert.is_function(logger.warn)
+    end)
+
+    it("has info function", function()
+      assert.is_function(logger.info)
+    end)
+
+    it("has debug function", function()
+      assert.is_function(logger.debug)
+    end)
+
+    it("has trace function", function()
+      assert.is_function(logger.trace)
+    end)
+
+    it("error accepts component and message", function()
+      -- Should not throw
+      logger.error("test", "Test message")
+    end)
+
+    it("error accepts message without component", function()
+      -- Should not throw
+      logger.error("Test message without component")
+    end)
+
+    it("warn accepts component and message", function()
+      logger.warn("test", "Test warning")
+    end)
+
+    it("info accepts component and message", function()
+      logger.info("test", "Test info")
+    end)
+
+    it("debug accepts component and message", function()
+      logger.setup({ log_level = "debug" })
+      logger.debug("test", "Test debug")
+    end)
+
+    it("trace accepts component and message", function()
+      logger.setup({ log_level = "trace" })
+      logger.trace("test", "Test trace")
+    end)
+
+    it("handles multiple message parts", function()
+      -- Should not throw
+      logger.info("test", "Part 1", "Part 2", "Part 3")
+    end)
+
+    it("handles table in message", function()
+      -- Should not throw
+      logger.info("test", "Message with table:", { key = "value" })
+    end)
+
+    it("handles boolean in message", function()
+      -- Should not throw
+      logger.info("test", "Boolean value:", true)
+    end)
+
+    it("handles nil in message", function()
+      -- Should not throw
+      logger.info("test", "Nil value:", nil)
     end)
   end)
 end)

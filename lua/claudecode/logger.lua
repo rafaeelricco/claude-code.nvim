@@ -1,5 +1,5 @@
 ---@brief Centralized logger for Claude Code Neovim integration.
--- Provides level-based logging.
+-- Provides level-based logging with lazy initialization.
 local M = {}
 
 M.levels = {
@@ -19,25 +19,39 @@ local level_values = {
 }
 
 local current_log_level_value = M.levels.INFO
+local initialized = false
 
---- @param plugin_config table The configuration table (e.g., from claudecode.init.state.config).
+--- @param plugin_config table|nil The configuration table (e.g., from claudecode.init.state.config).
 function M.setup(plugin_config)
   local conf = plugin_config
 
   if conf and conf.log_level and level_values[conf.log_level] then
     current_log_level_value = level_values[conf.log_level]
-  else
+  elseif conf and conf.log_level then
+    -- Invalid log level provided - warn but don't fail
     vim.notify(
-      "ClaudeCode Logger: Invalid or missing log_level in configuration (received: "
-        .. tostring(conf and conf.log_level)
-        .. "). Defaulting to INFO.",
+      "ClaudeCode Logger: Invalid log_level '" .. tostring(conf.log_level) .. "'. Defaulting to INFO.",
       vim.log.levels.WARN
     )
     current_log_level_value = M.levels.INFO
+  else
+    -- No config or no log_level - silently default to INFO
+    current_log_level_value = M.levels.INFO
+  end
+
+  initialized = true
+end
+
+--- Ensure logger is initialized (lazy initialization)
+local function ensure_initialized()
+  if not initialized then
+    M.setup({ log_level = "info" })
   end
 end
 
 local function log(level, component, message_parts)
+  ensure_initialized()
+
   if level > current_log_level_value then
     return
   end
@@ -146,8 +160,5 @@ function M.trace(component, ...)
     log(M.levels.TRACE, component, { ... })
   end
 end
-
-local default_config_for_initial_setup = require("claudecode.config").defaults
-M.setup(default_config_for_initial_setup)
 
 return M

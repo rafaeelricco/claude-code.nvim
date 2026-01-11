@@ -15,8 +15,6 @@
 
 local M = {}
 
-local claudecode_server_module = require("claudecode.server.init")
-
 local config = {
   split_side = "right",
   split_width_percentage = 0.30,
@@ -138,15 +136,15 @@ local function get_claude_command_and_env(cmd_args)
     cmd_string = base_cmd
   end
 
-  local sse_port_value = claudecode_server_module.state.port
+  -- Note: CLAUDE_CODE_SSE_PORT intentionally not set.
+  -- This plugin implements WebSocket (not SSE). Claude Code discovers
+  -- the server via lock file (~/.claude/ide/[port].lock) with transport="ws".
+  -- Setting CLAUDE_CODE_SSE_PORT would cause Claude to attempt an SSE
+  -- connection that doesn't exist, resulting in "IDE disconnected" status.
   local env_table = {
     ENABLE_IDE_INTEGRATION = "true",
     FORCE_CODE_TERMINAL = "true",
   }
-
-  if sse_port_value then
-    env_table["CLAUDE_CODE_SSE_PORT"] = tostring(sse_port_value)
-  end
 
   return cmd_string, env_table
 end

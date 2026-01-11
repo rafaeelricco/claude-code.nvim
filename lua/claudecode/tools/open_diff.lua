@@ -21,6 +21,18 @@ local schema = {
         type = "string",
         description = "Name for the diff tab/view",
       },
+      path = {
+        type = "string",
+        description = "Alias for old_file_path/new_file_path",
+      },
+      newContent = {
+        type = "string",
+        description = "Alias for new_file_contents",
+      },
+      newPath = {
+        type = "string",
+        description = "Alias for new_file_path",
+      },
     },
     required = { "old_file_path", "new_file_path", "new_file_contents", "tab_name" },
     additionalProperties = false,
@@ -39,6 +51,13 @@ local schema = {
 -- @return table MCP-compliant response with content array.
 -- @error table A table with code, message, and data for JSON-RPC error if failed.
 local function handler(params)
+  if not params.old_file_path and params.path then
+    params.old_file_path = params.path
+    params.new_file_path = params.newPath or params.path
+    params.new_file_contents = params.newContent
+    params.tab_name = params.tab_name or params.path
+  end
+
   -- Validate required parameters
   local required_params = { "old_file_path", "new_file_path", "new_file_contents", "tab_name" }
   for _, param_name in ipairs(required_params) do

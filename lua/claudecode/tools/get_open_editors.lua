@@ -15,7 +15,9 @@ local schema = {
 -- @return table A list of open editor information.
 local function handler(_params) -- Prefix unused params with underscore
   local editors = {}
+  local tabs = {}
   local buffers = vim.api.nvim_list_bufs()
+  local current_buf = vim.api.nvim_get_current_buf()
 
   for _, bufnr in ipairs(buffers) do
     -- Only include loaded, listed buffers with a file path
@@ -23,19 +25,42 @@ local function handler(_params) -- Prefix unused params with underscore
       local file_path = vim.api.nvim_buf_get_name(bufnr)
 
       if file_path and file_path ~= "" then
+        local is_dirty = vim.api.nvim_buf_get_option(bufnr, "modified")
+        local is_active = bufnr == current_buf
+        local filetype = vim.bo[bufnr].filetype or ""
+
         table.insert(editors, {
           filePath = file_path,
           fileUrl = "file://" .. file_path,
-          isDirty = vim.api.nvim_buf_get_option(bufnr, "modified"),
+          isDirty = is_dirty,
+        })
+
+        table.insert(tabs, {
+          uri = "file://" .. file_path,
+          isActive = is_active,
+          label = vim.fn.fnamemodify(file_path, ":t"),
+          languageId = filetype,
+          isDirty = is_dirty,
         })
       end
     end
   end
 
+  local content_payload = { tabs = tabs }
+
   -- The MCP spec for tools/list implies the result should be the direct data.
   -- The 'content' and 'isError' fields were an internal convention that is
   -- now handled by the main M.handle_invoke in tools/init.lua.
-  return { editors = editors }
+  return {
+    editors = editors,
+    tabs = tabs,
+    content = {
+      {
+        type = "text",
+        text = vim.json.encode(content_payload),
+      },
+    },
+  }
 end
 
 return {
