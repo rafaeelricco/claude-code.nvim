@@ -12,6 +12,12 @@ M.defaults = {
   connection_wait_delay = 200, -- Milliseconds to wait after connection before sending queued @ mentions
   connection_timeout = 10000, -- Maximum time to wait for Claude Code to connect (milliseconds)
   queue_timeout = 5000, -- Maximum time to keep @ mentions in queue (milliseconds)
+  buffer_resolver = {
+    enabled = true, -- Resolve/attach context from non-file buffers (NeoGit, quickfix, terminal...)
+    materialize_fallback = true, -- Dump buffer text to a temp file when no real file resolves
+    max_materialize_lines = 5000, -- Cap lines written when materializing
+    scratch_dir = nil, -- nil => stdpath('cache')/claudecode/scratch
+  },
   diff_opts = {
     auto_close_on_accept = true,
     show_diff_stats = true,
@@ -67,6 +73,21 @@ function M.validate(config)
   )
 
   assert(type(config.queue_timeout) == "number" and config.queue_timeout > 0, "queue_timeout must be a positive number")
+
+  assert(type(config.buffer_resolver) == "table", "buffer_resolver must be a table")
+  assert(type(config.buffer_resolver.enabled) == "boolean", "buffer_resolver.enabled must be a boolean")
+  assert(
+    type(config.buffer_resolver.materialize_fallback) == "boolean",
+    "buffer_resolver.materialize_fallback must be a boolean"
+  )
+  assert(
+    type(config.buffer_resolver.max_materialize_lines) == "number" and config.buffer_resolver.max_materialize_lines > 0,
+    "buffer_resolver.max_materialize_lines must be a positive number"
+  )
+  assert(
+    config.buffer_resolver.scratch_dir == nil or type(config.buffer_resolver.scratch_dir) == "string",
+    "buffer_resolver.scratch_dir must be nil or a string"
+  )
 
   assert(type(config.diff_opts) == "table", "diff_opts must be a table")
   assert(type(config.diff_opts.auto_close_on_accept) == "boolean", "diff_opts.auto_close_on_accept must be a boolean")

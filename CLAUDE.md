@@ -44,6 +44,7 @@ lua/claudecode/
 ├── lockfile.lua     - Lock file creation/removal
 ├── logger.lua       - Logging utility
 ├── selection.lua    - Visual selection tracking and broadcasting
+├── buffer_resolver.lua - Resolve/materialize context from non-file buffers
 ├── diff.lua         - Native diff view management
 ├── terminal.lua     - Terminal management (requires snacks.nvim)
 ├── server/
@@ -141,8 +142,9 @@ claudecode.get_version()         -- version table
 ### Selection Commands
 | Command | Description |
 |---------|-------------|
-| `:ClaudeCodeSend` | Send current visual selection to Claude |
+| `:ClaudeCodeSend` | Send current visual selection to Claude (works from non-file buffers — NeoGit, quickfix, terminal — via the buffer resolver) |
 | `:ClaudeCodeAdd [file]` | Add file to Claude context (% for current) |
+| `:ClaudeCodeAddBuffer` | Materialize the current buffer (or range) to a temp file and add it to Claude context |
 | `:ClaudeCodeTreeAdd` | Add selected file from tree explorer |
 
 ### Diff Commands

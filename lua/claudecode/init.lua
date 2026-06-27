@@ -606,6 +606,28 @@ function M._create_commands()
       return
     end
 
+    -- Non-file buffer (NeoGit, quickfix, terminal, scratch...): resolve real
+    -- paths or materialize text via the buffer_resolver pipeline.
+    local buftype = vim.api.nvim_buf_get_option(0, "buftype")
+    local is_real_file = buftype == "" and current_bufname ~= "" and vim.fn.filereadable(current_bufname) == 1
+    if not is_real_file then
+      local resolver = require("claudecode.buffer_resolver")
+      local line1, line2 = nil, nil
+      if opts and opts.range and opts.range > 0 then
+        line1, line2 = opts.line1, opts.line2
+      end
+      local result = resolver.resolve({ bufnr = 0, line1 = line1, line2 = line2 })
+      if result.error or #result.paths == 0 then
+        logger.warn("command", "ClaudeCodeSend: " .. (result.error or "nothing to attach"))
+        return
+      end
+      add_paths_to_claude(result.paths, {
+        context = "ClaudeCodeSend->Buffer",
+        delay = #result.paths > 1 and 10 or 0,
+      })
+      return
+    end
+
     local selection_module_ok, selection_module = pcall(require, "claudecode.selection")
     if selection_module_ok then
       -- Pass range information if available (for :'<,'> commands)
@@ -652,6 +674,23 @@ function M._create_commands()
     -- Handle regular text selection using range from visual mode
     local selection_module_ok, selection_module = pcall(require, "claudecode.selection")
     if not selection_module_ok then
+      return
+    end
+
+    -- Non-file buffer in visual mode: route the selected range through the resolver.
+    local bufname = vim.api.nvim_buf_get_name(0)
+    local is_real_file = vim.api.nvim_buf_get_option(0, "buftype") == ""
+      and bufname ~= ""
+      and vim.fn.filereadable(bufname) == 1
+    if not is_real_file then
+      local vstart, vend = vim.fn.line("'<"), vim.fn.line("'>")
+      local resolver = require("claudecode.buffer_resolver")
+      local result = resolver.resolve({ bufnr = 0, line1 = vstart, line2 = vend })
+      if result.error or #result.paths == 0 then
+        logger.warn("command", "ClaudeCodeSend: " .. (result.error or "nothing to attach"))
+        return
+      end
+      add_paths_to_claude(result.paths, { context = "ClaudeCodeSend_visual->Buffer", delay = 10 })
       return
     end
 
@@ -853,6 +892,30 @@ function M._create_commands()
     nargs = "+",
     complete = "file",
     desc = "Add specified file or directory to Claude Code context with optional line range",
+  })
+
+  vim.api.nvim_create_user_command("ClaudeCodeAddBuffer", function(opts)
+    if not M.state.server then
+      logger.error("command", "ClaudeCodeAddBuffer: Claude Code integration is not running.")
+      return
+    end
+
+    local resolver = require("claudecode.buffer_resolver")
+    local line1, line2 = nil, nil
+    if opts.range and opts.range > 0 then
+      line1, line2 = opts.line1, opts.line2
+    end
+
+    local path = resolver.materialize({ bufnr = 0, line1 = line1, line2 = line2 })
+    if not path then
+      logger.error("command", "ClaudeCodeAddBuffer: Failed to materialize buffer")
+      return
+    end
+
+    M.send_at_mention(path, nil, nil, "ClaudeCodeAddBuffer")
+  end, {
+    range = true,
+    desc = "Materialize current buffer (or range) to a temp file and add it to Claude context",
   })
 
   local terminal_ok, terminal = pcall(require, "claudecode.terminal")
