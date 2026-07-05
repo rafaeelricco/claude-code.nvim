@@ -231,14 +231,6 @@ function M.create_text_frame(text, fin)
   return M.create_frame(M.OPCODE.TEXT, text, fin, false)
 end
 
----@brief Create a binary frame
----@param data string The binary data to send
----@param fin boolean|nil Final fragment flag (default: true)
----@return string frame_data The encoded frame data
-function M.create_binary_frame(data, fin)
-  return M.create_frame(M.OPCODE.BINARY, data, fin, false)
-end
-
 ---@brief Create a close frame
 ---@param code number|nil Close code (default: 1000)
 ---@param reason string|nil Close reason (default: empty)
@@ -265,50 +257,6 @@ end
 function M.create_pong_frame(data)
   data = data or ""
   return M.create_frame(M.OPCODE.PONG, data, true, false)
-end
-
----@brief Check if an opcode is a control frame
----@param opcode number The opcode to check
----@return boolean is_control True if it's a control frame
-function M.is_control_frame(opcode)
-  return opcode >= 0x8
-end
-
----@brief Validate a WebSocket frame
----@param frame WebSocketFrame The frame to validate
----@return boolean valid True if the frame is valid
----@return string|nil error Error message if invalid
-function M.validate_frame(frame)
-  -- Control frames must not be fragmented
-  if M.is_control_frame(frame.opcode) and not frame.fin then
-    return false, "Control frames must not be fragmented"
-  end
-
-  -- Control frames must have payload <= 125 bytes
-  if M.is_control_frame(frame.opcode) and frame.payload_length > 125 then
-    return false, "Control frame payload too large"
-  end
-
-  -- Check for valid opcodes
-  local valid_opcodes = {
-    [M.OPCODE.CONTINUATION] = true,
-    [M.OPCODE.TEXT] = true,
-    [M.OPCODE.BINARY] = true,
-    [M.OPCODE.CLOSE] = true,
-    [M.OPCODE.PING] = true,
-    [M.OPCODE.PONG] = true,
-  }
-
-  if not valid_opcodes[frame.opcode] then
-    return false, "Invalid opcode: " .. frame.opcode
-  end
-
-  -- Text frames must contain valid UTF-8
-  if frame.opcode == M.OPCODE.TEXT and not utils.is_valid_utf8(frame.payload) then
-    return false, "Text frame contains invalid UTF-8"
-  end
-
-  return true
 end
 
 return M

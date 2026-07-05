@@ -1,35 +1,15 @@
---- Manages configuration for the Claude Code Neovim integration.
--- Provides default settings, validation, and application of user-defined configurations.
+--- Manages configuration for the headless Claude Code Neovim integration.
 local M = {}
 
 M.defaults = {
   port_range = { min = 10000, max = 65535 },
   auto_start = true,
-  terminal_cmd = nil,
   log_level = "info",
-  track_selection = true,
-  visual_demotion_delay_ms = 50, -- Milliseconds to wait before demoting a visual selection
-  connection_wait_delay = 200, -- Milliseconds to wait after connection before sending queued @ mentions
-  connection_timeout = 10000, -- Maximum time to wait for Claude Code to connect (milliseconds)
-  queue_timeout = 5000, -- Maximum time to keep @ mentions in queue (milliseconds)
-  buffer_resolver = {
-    enabled = true, -- Resolve/attach context from non-file buffers (NeoGit, quickfix, terminal...)
-    materialize_fallback = true, -- Dump buffer text to a temp file when no real file resolves
-    max_materialize_lines = 5000, -- Cap lines written when materializing
-    scratch_dir = nil, -- nil => stdpath('cache')/claudecode/scratch
-  },
-  diff_opts = {
-    auto_close_on_accept = true,
-    show_diff_stats = true,
-    vertical_split = true,
-    open_in_current_tab = true, -- Use current tab instead of creating new tab
-  },
 }
 
 --- Validates the provided configuration table.
--- @param config table The configuration table to validate.
--- @return boolean true if the configuration is valid.
--- @error string if any configuration option is invalid.
+---@param config table
+---@return boolean
 function M.validate(config)
   assert(
     type(config.port_range) == "table"
@@ -43,8 +23,6 @@ function M.validate(config)
 
   assert(type(config.auto_start) == "boolean", "auto_start must be a boolean")
 
-  assert(config.terminal_cmd == nil or type(config.terminal_cmd) == "string", "terminal_cmd must be nil or a string")
-
   local valid_log_levels = { "trace", "debug", "info", "warn", "error" }
   local is_valid_log_level = false
   for _, level in ipairs(valid_log_levels) do
@@ -55,57 +33,25 @@ function M.validate(config)
   end
   assert(is_valid_log_level, "log_level must be one of: " .. table.concat(valid_log_levels, ", "))
 
-  assert(type(config.track_selection) == "boolean", "track_selection must be a boolean")
-
-  assert(
-    type(config.visual_demotion_delay_ms) == "number" and config.visual_demotion_delay_ms >= 0,
-    "visual_demotion_delay_ms must be a non-negative number"
-  )
-
-  assert(
-    type(config.connection_wait_delay) == "number" and config.connection_wait_delay >= 0,
-    "connection_wait_delay must be a non-negative number"
-  )
-
-  assert(
-    type(config.connection_timeout) == "number" and config.connection_timeout > 0,
-    "connection_timeout must be a positive number"
-  )
-
-  assert(type(config.queue_timeout) == "number" and config.queue_timeout > 0, "queue_timeout must be a positive number")
-
-  assert(type(config.buffer_resolver) == "table", "buffer_resolver must be a table")
-  assert(type(config.buffer_resolver.enabled) == "boolean", "buffer_resolver.enabled must be a boolean")
-  assert(
-    type(config.buffer_resolver.materialize_fallback) == "boolean",
-    "buffer_resolver.materialize_fallback must be a boolean"
-  )
-  assert(
-    type(config.buffer_resolver.max_materialize_lines) == "number" and config.buffer_resolver.max_materialize_lines > 0,
-    "buffer_resolver.max_materialize_lines must be a positive number"
-  )
-  assert(
-    config.buffer_resolver.scratch_dir == nil or type(config.buffer_resolver.scratch_dir) == "string",
-    "buffer_resolver.scratch_dir must be nil or a string"
-  )
-
-  assert(type(config.diff_opts) == "table", "diff_opts must be a table")
-  assert(type(config.diff_opts.auto_close_on_accept) == "boolean", "diff_opts.auto_close_on_accept must be a boolean")
-  assert(type(config.diff_opts.show_diff_stats) == "boolean", "diff_opts.show_diff_stats must be a boolean")
-  assert(type(config.diff_opts.vertical_split) == "boolean", "diff_opts.vertical_split must be a boolean")
-  assert(type(config.diff_opts.open_in_current_tab) == "boolean", "diff_opts.open_in_current_tab must be a boolean")
-
   return true
 end
 
 --- Applies user configuration on top of default settings and validates the result.
--- @param user_config table|nil The user-provided configuration table.
--- @return table The final, validated configuration table.
+---@param user_config table|nil
+---@return table
 function M.apply(user_config)
   local config = vim.deepcopy(M.defaults)
 
   if user_config then
-    config = vim.tbl_deep_extend("force", config, user_config)
+    for key, value in pairs(user_config) do
+      if M.defaults[key] ~= nil then
+        if type(M.defaults[key]) == "table" and type(value) == "table" then
+          config[key] = vim.tbl_deep_extend("force", config[key], value)
+        else
+          config[key] = value
+        end
+      end
+    end
   end
 
   M.validate(config)

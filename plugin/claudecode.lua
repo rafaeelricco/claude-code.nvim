@@ -20,8 +20,3 @@ end
 -- when require("claudecode").setup() is called.
 -- This file (plugin/claudecode.lua) is primarily for the load guard
 -- and the optional auto-setup mechanism.
-
-local main_module_ok, _ = pcall(require, "claudecode")
-if not main_module_ok then
-  vim.notify("ClaudeCode: Failed to load main module. Plugin may not function correctly.", vim.log.levels.ERROR)
-end

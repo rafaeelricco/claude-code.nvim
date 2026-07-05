@@ -70,16 +70,6 @@ local function add32(a, b)
   return band(sum, 0xFFFFFFFF)
 end
 
----@brief Generate a random, spec-compliant WebSocket key.
----@return string key Base64 encoded 16-byte random nonce.
-function M.generate_websocket_key()
-  local random_bytes = {}
-  for _ = 1, 16 do
-    random_bytes[#random_bytes + 1] = string.char(math.random(0, 255))
-  end
-  return M.base64_encode(table.concat(random_bytes))
-end
-
 ---@brief Base64 encode a string
 ---@param data string The data to encode
 ---@return string encoded The base64 encoded string
@@ -107,45 +97,6 @@ function M.base64_encode(data)
 
   local encoded = table.concat(result)
   return encoded:sub(1, #encoded - #padding) .. padding
-end
-
----@brief Base64 decode a string
----@param data string The base64 encoded string
----@return string|nil decoded The decoded string, or nil on error (e.g. invalid char)
-function M.base64_decode(data)
-  local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-  local lookup = {}
-  for i = 1, #chars do
-    lookup[chars:sub(i, i)] = i - 1
-  end
-  lookup["="] = 0
-
-  local result = {}
-  local buffer = 0
-  local bits = 0
-
-  for i = 1, #data do
-    local char = data:sub(i, i)
-    local value = lookup[char]
-
-    if value == nil then
-      return nil
-    end
-
-    if char == "=" then
-      break
-    end
-
-    buffer = (buffer * 64) + value
-    bits = bits + 6
-
-    if bits >= 8 then
-      bits = bits - 8
-      result[#result + 1] = string.char(rshift(buffer, bits))
-      buffer = band(buffer, (lshift(1, bits)) - 1)
-    end
-  end
-  return table.concat(result)
 end
 
 ---@brief Pure Lua SHA-1 implementation
@@ -364,32 +315,6 @@ function M.bytes_to_uint64(bytes)
   return num
 end
 
----@brief XOR lookup table for faster operations
-local xor_table = {}
-for i = 0, 255 do
-  xor_table[i] = {}
-  for j = 0, 255 do
-    local result = 0
-    local a, b = i, j
-    local bit_val = 1
-
-    while a > 0 or b > 0 do
-      local a_bit = a % 2
-      local b_bit = b % 2
-
-      if a_bit ~= b_bit then
-        result = result + bit_val
-      end
-
-      a = math.floor(a / 2)
-      b = math.floor(b / 2)
-      bit_val = bit_val * 2
-    end
-
-    xor_table[i][j] = result
-  end
-end
-
 ---@brief Apply XOR mask to payload data
 ---@param data string The data to mask/unmask
 ---@param mask string The 4-byte mask
@@ -401,20 +326,10 @@ function M.apply_mask(data, mask)
   for i = 1, #data do
     local mask_idx = ((i - 1) % 4) + 1
     local data_byte = data:byte(i)
-    result[i] = string.char(xor_table[data_byte][mask_bytes[mask_idx]])
+    result[i] = string.char(bxor(data_byte, mask_bytes[mask_idx]))
   end
 
   return table.concat(result)
-end
-
----@brief Shuffle an array in place using Fisher-Yates algorithm
----@param tbl table The array to shuffle
-function M.shuffle_array(tbl)
-  math.randomseed(os.time())
-  for i = #tbl, 2, -1 do
-    local j = math.random(i)
-    tbl[i], tbl[j] = tbl[j], tbl[i]
-  end
 end
 
 return M
