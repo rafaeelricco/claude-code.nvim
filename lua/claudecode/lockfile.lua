@@ -1,6 +1,6 @@
 ---@brief [[
 --- Lock file management for Claude Code Neovim integration.
---- This module handles creation, removal and updating of lock files
+--- This module handles creation and removal of lock files
 --- which allow Claude Code CLI to discover the Neovim integration.
 ---@brief ]]
 
@@ -199,68 +199,6 @@ function M.remove(port)
 
   logger.info("lockfile", "Lock file removed successfully: " .. lock_path)
   return true
-end
-
---- Update the lock file for the given port
----@param port number The port number of the WebSocket server
----@return boolean success Whether the operation was successful
----@return string result_or_error The lock file path if successful, or error message if failed
----@return string? auth_token The authentication token if successful
-function M.update(port)
-  if not port or type(port) ~= "number" then
-    return false, "Invalid port number"
-  end
-
-  local exists = vim.fn.filereadable(M.lock_dir .. "/" .. port .. ".lock") == 1
-  if exists then
-    local remove_ok, remove_err = M.remove(port)
-    if not remove_ok then
-      return false, "Failed to update lock file: " .. remove_err
-    end
-  end
-
-  return M.create(port)
-end
-
---- Read the authentication token from a lock file
----@param port number The port number of the WebSocket server
----@return boolean success Whether the operation was successful
----@return string? auth_token The authentication token if successful, or nil if failed
----@return string? error Error message if operation failed
-function M.get_auth_token(port)
-  if not port or type(port) ~= "number" then
-    return false, nil, "Invalid port number"
-  end
-
-  local lock_path = M.lock_dir .. "/" .. port .. ".lock"
-
-  if vim.fn.filereadable(lock_path) == 0 then
-    return false, nil, "Lock file does not exist: " .. lock_path
-  end
-
-  local file = io.open(lock_path, "r")
-  if not file then
-    return false, nil, "Failed to open lock file: " .. lock_path
-  end
-
-  local content = file:read("*all")
-  file:close()
-
-  if not content or content == "" then
-    return false, nil, "Lock file is empty: " .. lock_path
-  end
-
-  local ok, lock_data = pcall(vim.json.decode, content)
-  if not ok or type(lock_data) ~= "table" then
-    return false, nil, "Failed to parse lock file JSON: " .. lock_path
-  end
-
-  local auth_token = lock_data.authToken
-  if not auth_token or type(auth_token) ~= "string" then
-    return false, nil, "No valid auth token found in lock file"
-  end
-
-  return true, auth_token, nil
 end
 
 --- Get active LSP clients using available API

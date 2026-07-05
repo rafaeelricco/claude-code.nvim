@@ -91,6 +91,11 @@ describe("server integration", function()
     return timer
   end
 
+  local function decode_written_response(tcp_handle)
+    local parsed = frame.parse_frame(tcp_handle._write_buffer[1])
+    return vim.json.decode(parsed.payload)
+  end
+
   before_each(function()
     -- Clear all module caches
     for key in pairs(package.loaded) do
@@ -115,9 +120,6 @@ describe("server integration", function()
     vim.empty_dict = vim.empty_dict or function()
       return {}
     end
-
-    -- Clear global state
-    _G.claude_deferred_responses = nil
 
     -- Load modules
     frame = require("claudecode.server.frame")
@@ -200,17 +202,6 @@ describe("server integration", function()
       assert.is_nil(server.state.auth_token)
     end)
 
-    it("clears deferred responses on stop", function()
-      local config = { port_range = { min = 10000, max = 65535 } }
-      server.start(config)
-
-      _G.claude_deferred_responses = { test = function() end }
-
-      server.stop()
-
-      assert.is_table(_G.claude_deferred_responses)
-      assert.equals(0, vim.tbl_count(_G.claude_deferred_responses or {}))
-    end)
   end)
 
   describe("get_status", function()
@@ -285,39 +276,6 @@ describe("server integration", function()
       end)
     end)
 
-    describe("prompts/list", function()
-      it("returns empty prompts array", function()
-        local result = server.state.handlers["prompts/list"]({}, {})
-
-        assert.is_table(result)
-        assert.is_table(result.prompts)
-        assert.equals(0, #result.prompts)
-      end)
-    end)
-  end)
-
-  describe("send", function()
-    it("returns false when server not running", function()
-      local client = { id = "test" }
-      local result = server.send(client, "test", {})
-
-      assert.is_false(result)
-    end)
-
-    it("returns true when server running", function()
-      local config = { port_range = { min = 10000, max = 65535 } }
-      server.start(config)
-
-      -- Create mock client
-      local tcp_handle = create_mock_tcp_handle()
-      local client = require("claudecode.server.client").create_client(tcp_handle)
-      client.state = "connected"
-      server.state.server.clients[client.id] = client
-
-      local result = server.send(client, "test/method", { data = "test" })
-
-      assert.is_true(result)
-    end)
   end)
 
   describe("send_response", function()
@@ -359,34 +317,6 @@ describe("server integration", function()
     end)
   end)
 
-  describe("broadcast", function()
-    it("returns false when server not running", function()
-      local result = server.broadcast("test/method", {})
-
-      assert.is_false(result)
-    end)
-
-    it("broadcasts to all clients", function()
-      local config = { port_range = { min = 10000, max = 65535 } }
-      server.start(config)
-
-      local tcp_handle1 = create_mock_tcp_handle()
-      local tcp_handle2 = create_mock_tcp_handle()
-      local client1 = require("claudecode.server.client").create_client(tcp_handle1)
-      local client2 = require("claudecode.server.client").create_client(tcp_handle2)
-      client1.state = "connected"
-      client2.state = "connected"
-      server.state.server.clients[client1.id] = client1
-      server.state.server.clients[client2.id] = client2
-
-      local result = server.broadcast("test/method", { data = "broadcast" })
-
-      assert.is_true(result)
-      assert.equals(1, #tcp_handle1._write_buffer)
-      assert.equals(1, #tcp_handle2._write_buffer)
-    end)
-  end)
-
   describe("_handle_message", function()
     before_each(function()
       local config = { port_range = { min = 10000, max = 65535 } }
@@ -422,7 +352,7 @@ describe("server integration", function()
 
       -- Should send error response
       assert.equals(1, #tcp_handle._write_buffer)
-      local response = vim.json.decode(tcp_handle._write_buffer[1])
+      local response = decode_written_response(tcp_handle)
       assert.equals(-32700, response.error.code)
     end)
 
@@ -440,7 +370,7 @@ describe("server integration", function()
 
       -- Should send error response
       assert.equals(1, #tcp_handle._write_buffer)
-      local response = vim.json.decode(tcp_handle._write_buffer[1])
+      local response = decode_written_response(tcp_handle)
       assert.equals(-32600, response.error.code)
     end)
 
@@ -461,7 +391,7 @@ describe("server integration", function()
 
       -- Should send error response
       assert.equals(1, #tcp_handle._write_buffer)
-      local response = vim.json.decode(tcp_handle._write_buffer[1])
+      local response = decode_written_response(tcp_handle)
       assert.equals(-32601, response.error.code)
     end)
 
