@@ -11,6 +11,7 @@ describe("claudecode init integration", function()
   local original_io_open
   local original_os_remove
   local mock_files = {}
+  local registered_commands = {}
 
   -- Mock TCP handle
   local function create_mock_tcp_handle()
@@ -141,6 +142,7 @@ describe("claudecode init integration", function()
     end
 
     setup_file_mocks()
+    registered_commands = {}
 
     -- Setup vim mocks
     vim.fn.filereadable = function(path)
@@ -180,16 +182,15 @@ describe("claudecode init integration", function()
       end,
     }
 
-    vim.api.nvim_create_user_command = function() end
+    vim.api.nvim_create_user_command = function(name, handler, opts)
+      registered_commands[name] = { handler = handler, opts = opts }
+    end
     vim.api.nvim_create_autocmd = function()
       return 1
     end
     vim.api.nvim_create_augroup = function()
       return 1
     end
-
-    -- Clear global state
-    _G.claude_deferred_responses = nil
 
     claudecode = require("claudecode")
   end)
@@ -239,6 +240,20 @@ describe("claudecode init integration", function()
     it("returns the module", function()
       local result = claudecode.setup()
       assert.equals(claudecode, result)
+    end)
+
+    it("registers only headless commands and disabled compatibility stubs", function()
+      claudecode.setup({ auto_start = false })
+
+      assert.is_table(registered_commands.ClaudeCodeStart)
+      assert.is_table(registered_commands.ClaudeCodeStop)
+      assert.is_table(registered_commands.ClaudeCodeStatus)
+      assert.is_table(registered_commands.ClaudeCode)
+      assert.is_table(registered_commands.ClaudeCodeSend)
+      assert.is_table(registered_commands.ClaudeCodeAdd)
+      assert.is_table(registered_commands.ClaudeCodeTreeAdd)
+      assert.is_table(registered_commands.ClaudeCodeDiffAccept)
+      assert.is_nil(registered_commands.ClaudeCodeAddBuffer)
     end)
   end)
 
